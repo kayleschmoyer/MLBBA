@@ -148,6 +148,35 @@ def add_home_away_win_pct(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_head_to_head_win_pct(df: pd.DataFrame) -> pd.DataFrame:
+    """Add win percentage for the home team against the away team over the last
+    five years."""
+
+    df = df.copy()
+
+    head_to_head_pct: list[float | None] = []
+    matchup_results: dict[tuple[str, str], list[tuple[pd.Timestamp, str]]] = {}
+
+    for row in df.itertuples(index=False):
+        cutoff = row.date - pd.DateOffset(years=5)
+
+        matchup = tuple(sorted([row.home_team, row.away_team]))
+        results = matchup_results.get(matchup, [])
+        recent = [(d, w) for d, w in results if d >= cutoff]
+
+        wins = sum(1 for d, w in recent if w == row.home_team)
+        pct = wins / len(recent) if recent else None
+        head_to_head_pct.append(pct)
+
+        winner = row.home_team if row.home_win else row.away_team
+        results.append((row.date, winner))
+        matchup_results[matchup] = [r for r in results if r[0] >= cutoff]
+
+    df["head_to_head_win_pct"] = head_to_head_pct
+
+    return df
+
+
 def add_run_stats(df: pd.DataFrame) -> pd.DataFrame:
     """Add rolling run averages and differential for each team's prior games."""
     df = df.copy()
@@ -213,5 +242,6 @@ if __name__ == "__main__":
     games = add_win_loss_columns(games)
     games = add_rolling_win_features(games)
     games = add_home_away_win_pct(games)
+    games = add_head_to_head_win_pct(games)
     games = add_run_stats(games)
     print(games.head())
