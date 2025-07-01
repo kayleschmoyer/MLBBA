@@ -6,6 +6,8 @@ import pandas as pd
 
 # Path to the CSV containing scraped historical games
 DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "historical_games.csv"
+# Path to store the engineered features
+FEATURES_FILE = Path(__file__).resolve().parents[1] / "data" / "games_with_features.csv"
 
 
 def load_games() -> pd.DataFrame:
@@ -244,4 +246,5 @@ if __name__ == "__main__":
     games = add_home_away_win_pct(games)
     games = add_head_to_head_win_pct(games)
     games = add_run_stats(games)
-    print(games.head())
+    games.to_csv(FEATURES_FILE, index=False, encoding="utf-8", sep=",")
+    print(f"Saved features to {FEATURES_FILE}")
