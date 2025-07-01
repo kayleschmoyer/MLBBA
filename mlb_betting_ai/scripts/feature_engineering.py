@@ -43,6 +43,30 @@ def _rolling_pct(results: list[int], n: int | None = None) -> float | None:
     return sum(sub) / len(sub)
 
 
+def _rolling_mean(values: list[int], n: int | None = None) -> float | None:
+    """Return average of last n values or the entire list."""
+    if n is None:
+        sub = values
+    else:
+        sub = values[-n:]
+    if not sub:
+        return None
+    return sum(sub) / len(sub)
+
+
+def _run_diff(scored: list[int], allowed: list[int], n: int | None = 10) -> float | None:
+    """Return run differential over the last n games."""
+    if n is None:
+        scored_sub = scored
+        allowed_sub = allowed
+    else:
+        scored_sub = scored[-n:]
+        allowed_sub = allowed[-n:]
+    if not scored_sub:
+        return None
+    return sum(scored_sub) - sum(allowed_sub)
+
+
 def add_rolling_win_features(df: pd.DataFrame) -> pd.DataFrame:
     """Add rolling win percentage features for each team's prior games."""
     df = df.copy()
@@ -95,8 +119,69 @@ def add_rolling_win_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_run_stats(df: pd.DataFrame) -> pd.DataFrame:
+    """Add rolling run averages and differential for each team's prior games."""
+    df = df.copy()
+
+    home_scored_last5: list[float | None] = []
+    home_scored_last10: list[float | None] = []
+    home_allowed_last5: list[float | None] = []
+    home_allowed_last10: list[float | None] = []
+    home_run_diff_last10: list[float | None] = []
+    away_scored_last5: list[float | None] = []
+    away_scored_last10: list[float | None] = []
+    away_allowed_last5: list[float | None] = []
+    away_allowed_last10: list[float | None] = []
+    away_run_diff_last10: list[float | None] = []
+
+    scored: dict[str, list[int]] = {}
+    allowed: dict[str, list[int]] = {}
+
+    for row in df.itertuples(index=False):
+        for team in [row.home_team, row.away_team]:
+            scored.setdefault(team, [])
+            allowed.setdefault(team, [])
+
+        h_scored = scored[row.home_team]
+        h_allowed = allowed[row.home_team]
+        a_scored = scored[row.away_team]
+        a_allowed = allowed[row.away_team]
+
+        home_scored_last5.append(_rolling_mean(h_scored, 5))
+        home_scored_last10.append(_rolling_mean(h_scored, 10))
+        home_allowed_last5.append(_rolling_mean(h_allowed, 5))
+        home_allowed_last10.append(_rolling_mean(h_allowed, 10))
+        home_run_diff_last10.append(_run_diff(h_scored, h_allowed, 10))
+
+        away_scored_last5.append(_rolling_mean(a_scored, 5))
+        away_scored_last10.append(_rolling_mean(a_scored, 10))
+        away_allowed_last5.append(_rolling_mean(a_allowed, 5))
+        away_allowed_last10.append(_rolling_mean(a_allowed, 10))
+        away_run_diff_last10.append(_run_diff(a_scored, a_allowed, 10))
+
+        h_scored.append(row.home_score)
+        h_allowed.append(row.away_score)
+        a_scored.append(row.away_score)
+        a_allowed.append(row.home_score)
+
+    df["home_avg_runs_scored_last5"] = home_scored_last5
+    df["home_avg_runs_scored_last10"] = home_scored_last10
+    df["home_avg_runs_allowed_last5"] = home_allowed_last5
+    df["home_avg_runs_allowed_last10"] = home_allowed_last10
+    df["home_run_diff_last10"] = home_run_diff_last10
+
+    df["away_avg_runs_scored_last5"] = away_scored_last5
+    df["away_avg_runs_scored_last10"] = away_scored_last10
+    df["away_avg_runs_allowed_last5"] = away_allowed_last5
+    df["away_avg_runs_allowed_last10"] = away_allowed_last10
+    df["away_run_diff_last10"] = away_run_diff_last10
+
+    return df
+
+
 if __name__ == "__main__":
     games = load_games()
     games = add_win_loss_columns(games)
     games = add_rolling_win_features(games)
+    games = add_run_stats(games)
     print(games.head())
