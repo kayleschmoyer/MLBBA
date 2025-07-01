@@ -11,23 +11,26 @@ from pathlib import Path
 from xgboost import XGBClassifier
 
 # File paths
-DATA_FILE = Path(__file__).resolve().parents[1] / "data" / "games_with_features.csv"
-MODEL_FILE = Path(__file__).resolve().parents[1] / "models" / "mlb_model.pkl"
+BASE_DIR = Path(__file__).resolve().parents[1]
+DATA_FILE = BASE_DIR / "data" / "games_with_features.csv"
+MODEL_FILE = BASE_DIR / "models" / "mlb_model.pkl"
+FEATURE_FILE = BASE_DIR / "models" / "feature_names.txt"
 
-# ESPN schedule URL for today's date
+# ESPN schedule URL
 today_str = datetime.today().strftime("%Y%m%d")
 ESPN_URL = f"https://www.espn.com/mlb/schedule/_/date/{today_str}"
 
-
 def load_model() -> XGBClassifier:
     return joblib.load(MODEL_FILE)
-
 
 def load_features() -> pd.DataFrame:
     df = pd.read_csv(DATA_FILE)
     df = df.dropna().copy()
     return df
 
+def load_feature_names() -> list[str]:
+    with open(FEATURE_FILE, "r") as f:
+        return [line.strip() for line in f.readlines()]
 
 def scrape_today_games() -> list[dict]:
     headers = {
@@ -49,17 +52,14 @@ def scrape_today_games() -> list[dict]:
     schedule_blocks = soup.find_all("div", class_="ResponsiveTable")
     games = []
 
-    # Cross-platform way to format today's date without leading zero
+    # Windows-compatible date format
     today = datetime.today()
-    day_str = str(today.day)  # No leading zero
+    day_str = str(today.day)
     today_date = today.strftime(f"%A, %B {day_str}, %Y")
 
     for block in schedule_blocks:
         title = block.find("div", class_="Table__Title")
-        if not title:
-            continue
-
-        if today_date not in title.get_text(strip=True):
+        if not title or today_date not in title.get_text(strip=True):
             continue
 
         team_links = block.select('a.AnchorLink[href^="/mlb/team/"]')
@@ -72,7 +72,7 @@ def scrape_today_games() -> list[dict]:
                 games.append({"home_team": home, "away_team": away})
             except IndexError:
                 continue
-        break  # Stop after parsing the first valid block for today
+        break
 
     if not games:
         print("⚠️ No games found for today.")
@@ -84,7 +84,6 @@ def map_team_name(raw_name: str, reference_df: pd.DataFrame) -> str:
     matches = [team for team in reference_df["home_team"].unique() if raw_name.lower() in team.lower()]
     return matches[0] if matches else raw_name
 
-
 def get_latest_team_features(df: pd.DataFrame, team: str, is_home: bool) -> dict:
     side = "home" if is_home else "away"
     team_col = "home_team" if is_home else "away_team"
@@ -92,9 +91,7 @@ def get_latest_team_features(df: pd.DataFrame, team: str, is_home: bool) -> dict
     if team_games.empty:
         return {}
     latest_game = team_games.sort_values("date", ascending=False).iloc[0]
-    feature_prefix = f"{side}_"
-    return {col: latest_game[col] for col in df.columns if col.startswith(feature_prefix)}
-
+    return {col: latest_game[col] for col in df.columns if col.startswith(f"{side}_")}
 
 def predict_games(games: list[dict], df: pd.DataFrame, model: XGBClassifier, feature_names: list[str]) -> None:
     for game in games:
@@ -114,7 +111,7 @@ def predict_games(games: list[dict], df: pd.DataFrame, model: XGBClassifier, fea
             print(f"❌ Value error for {away_team} @ {home_team}: {e}")
             continue
 
-        prob = model.predict_proba(X_input)[0][1]  # Home win probability
+        prob = model.predict_proba(X_input)[0][1]
 
         importance = model.feature_importances_
         top_indices = np.argsort(importance)[::-1][:3]
@@ -128,11 +125,10 @@ def predict_games(games: list[dict], df: pd.DataFrame, model: XGBClassifier, fea
         for reason in reasons:
             print(f"• {reason}")
 
-
 def main() -> None:
     df = load_features()
     model = load_model()
-    feature_names = [col for col in df.columns if col.startswith("home_") or col.startswith("away_")]
+    feature_names = load_feature_names()
     games = scrape_today_games()
 
     if not games:
@@ -140,7 +136,6 @@ def main() -> None:
         return
 
     predict_games(games, df, model, feature_names)
-
 
 if __name__ == "__main__":
     main()
