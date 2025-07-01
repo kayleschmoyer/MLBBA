@@ -119,6 +119,35 @@ def add_rolling_win_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_home_away_win_pct(df: pd.DataFrame) -> pd.DataFrame:
+    """Add win percentage for teams when playing at home or on the road."""
+    df = df.copy()
+
+    home_team_home_win_pct: list[float | None] = []
+    away_team_away_win_pct: list[float | None] = []
+
+    home_records: dict[str, list[int]] = {}
+    away_records: dict[str, list[int]] = {}
+
+    for row in df.itertuples(index=False):
+        h_record = home_records.setdefault(row.home_team, [])
+        a_record = away_records.setdefault(row.away_team, [])
+
+        home_team_home_win_pct.append(_rolling_pct(h_record))
+        away_team_away_win_pct.append(_rolling_pct(a_record))
+
+        h_result = 1 if row.home_win else 0
+        a_result = 1 if row.away_win else 0
+
+        h_record.append(h_result)
+        a_record.append(a_result)
+
+    df["home_team_home_win_pct"] = home_team_home_win_pct
+    df["away_team_away_win_pct"] = away_team_away_win_pct
+
+    return df
+
+
 def add_run_stats(df: pd.DataFrame) -> pd.DataFrame:
     """Add rolling run averages and differential for each team's prior games."""
     df = df.copy()
@@ -183,5 +212,6 @@ if __name__ == "__main__":
     games = load_games()
     games = add_win_loss_columns(games)
     games = add_rolling_win_features(games)
+    games = add_home_away_win_pct(games)
     games = add_run_stats(games)
     print(games.head())
