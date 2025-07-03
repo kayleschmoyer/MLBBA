@@ -16,3 +16,9 @@ away_avg_runs_scored_last10
 away_avg_runs_allowed_last5
 away_avg_runs_allowed_last10
 away_run_diff_last10
+home_run_diff_season
+away_run_diff_season
+home_rest_days
+away_rest_days
+home_starting_pitcher_era
+away_starting_pitcher_era

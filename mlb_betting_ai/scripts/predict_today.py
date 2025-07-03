@@ -52,7 +52,6 @@ def scrape_today_games() -> list[dict]:
     schedule_blocks = soup.find_all("div", class_="ResponsiveTable")
     games = []
 
-    # Windows-compatible date format
     today = datetime.today()
     day_str = str(today.day)
     today_date = today.strftime(f"%A, %B {day_str}, %Y")
@@ -93,6 +92,11 @@ def get_latest_team_features(df: pd.DataFrame, team: str, is_home: bool) -> dict
     latest_game = team_games.sort_values("date", ascending=False).iloc[0]
     return {col: latest_game[col] for col in df.columns if col.startswith(f"{side}_")}
 
+def summarize_reasons(features: dict, feature_names: list[str], importance: list[float]) -> list[str]:
+    top_indices = np.argsort(importance)[::-1][:5]
+    top_features = [feature_names[i] for i in top_indices if feature_names[i] in features]
+    return [f"{f}: {features[f]:.2f}" for f in top_features]
+
 def predict_games(games: list[dict], df: pd.DataFrame, model: XGBClassifier, feature_names: list[str]) -> None:
     for game in games:
         home_team = map_team_name(game["home_team"], df)
@@ -112,11 +116,7 @@ def predict_games(games: list[dict], df: pd.DataFrame, model: XGBClassifier, fea
             continue
 
         prob = model.predict_proba(X_input)[0][1]
-
-        importance = model.feature_importances_
-        top_indices = np.argsort(importance)[::-1][:3]
-        top_features = [feature_names[i] for i in top_indices]
-        reasons = [f"{f}: {features[f]:.2f}" for f in top_features]
+        reasons = summarize_reasons(features, feature_names, model.feature_importances_)
 
         print("\n🏆 Prediction:")
         print(f"{away_team} @ {home_team}")
